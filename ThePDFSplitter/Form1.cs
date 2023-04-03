@@ -1,4 +1,5 @@
 using System;
+using System.CodeDom;
 using System.IO;
 using System.Text.RegularExpressions;
 using System.Windows.Forms;
@@ -17,43 +18,64 @@ namespace ThePDFSplitter
 
         private void btnSelectPDF_Click(object sender, EventArgs e)
         {
-            using (OpenFileDialog openFileDialog = new OpenFileDialog())
+            if((txt_starting.Text.Length <= 0) & (txt_ending.Text.Length <= 0)) {
+
+                MessageBox.Show("Please set starting and ending values first.");
+            } else
             {
-                openFileDialog.Filter = "PDF Files (*.pdf)|*.pdf";
-                if (openFileDialog.ShowDialog() == DialogResult.OK)
+                using (OpenFileDialog openFileDialog = new OpenFileDialog())
                 {
-                    string sourcePdfPath = openFileDialog.FileName;
-                    SplitAndRenamePDF(sourcePdfPath);
+                    openFileDialog.Filter = "PDF Files (*.pdf)|*.pdf";
+                    if (openFileDialog.ShowDialog() == DialogResult.OK)
+                    {
+                        string sourcePdfPath = openFileDialog.FileName;
+                        SplitAndRenamePDF(sourcePdfPath);
+                    }
                 }
             }
+            
         }
 
         private void SplitAndRenamePDF(string sourcePdfPath)
         {
-            string outputDirectory = Path.GetDirectoryName(sourcePdfPath);
-
-            using (PdfReader reader = new PdfReader(sourcePdfPath))
+            try
             {
-                PdfDocument sourcePdf = new PdfDocument(reader);
-                int numberOfPages = sourcePdf.GetNumberOfPages();
+                string outputDirectory = Path.GetDirectoryName(sourcePdfPath);
 
-                for (int i = 1; i <= numberOfPages; i++)
+                using (PdfReader reader = new PdfReader(sourcePdfPath))
                 {
-                    string outputPath = Path.Combine(outputDirectory, $"{i}.pdf");
-                    PdfDocument newPdf = new PdfDocument(new PdfWriter(outputPath));
-                    sourcePdf.CopyPagesTo(i, i, newPdf);
-                    newPdf.Close();
+                    PdfDocument sourcePdf = new PdfDocument(reader);
+                    int numberOfPages = sourcePdf.GetNumberOfPages();
 
-                    string newFilename = GetTextBetweenKeywords(outputPath, "agreement between", "hereinafter");
-                    newFilename = SanitizeFilename(newFilename);
-                    string newFilepath = Path.Combine(outputDirectory, $"{newFilename}.pdf");
+                    for (int i = 1; i <= numberOfPages; i++)
+                    {
+                        string outputPath = Path.Combine(outputDirectory, $"{i}.pdf");
+                        PdfDocument newPdf = new PdfDocument(new PdfWriter(outputPath));
+                        sourcePdf.CopyPagesTo(i, i, newPdf);
+                        newPdf.Close();
 
-                    File.Move(outputPath, newFilepath);
+                        string newFilename = GetTextBetweenKeywords(outputPath, txt_starting.Text, txt_ending.Text);
+                        newFilename = SanitizeFilename(newFilename);
+                        string newFilepath = Path.Combine(outputDirectory, $"{newFilename}.pdf");
+                        if (File.Exists(newFilepath))
+                        {
+                            File.Delete(newFilepath);
+                        }
+                        MessageBox.Show(newFilename);
+                        File.Move(outputPath, newFilepath);
+                    }
                 }
+                lbl_status.Text = "Completed Successfully";
             }
+            catch (Exception)
+            {
+                lbl_status.Text = "Failed: ";
+                throw;
+            }
+         
         }
 
-        private string GetFirstCharactersFromPage(string pdfPath,int startingChar, int endingChar)
+        private string GetCharactersWithinIndexes(string pdfPath,int startingChar, int endingChar)
         {
             using (PdfReader reader = new PdfReader(pdfPath))
             {
@@ -74,10 +96,13 @@ namespace ThePDFSplitter
 
                 int startIndex = pageText.IndexOf(startKeyword, StringComparison.OrdinalIgnoreCase) + startKeyword.Length;
                 int endIndex = pageText.IndexOf(endKeyword, StringComparison.OrdinalIgnoreCase);
+                //MessageBox.Show(startIndex.ToString() + " " + endIndex.ToString());
 
                 if (startIndex > -1 && endIndex > -1 && endIndex > startIndex)
                 {
-                    return pageText.Substring(startIndex, endIndex - startIndex).Trim();
+                    string text = pageText.Substring(startIndex, endIndex - startIndex).Trim();
+                    string sanitizedText = Regex.Replace(text, @"[^a-zA-Z0-9]+", "");
+                    return sanitizedText;
                 }
                 else
                 {
@@ -91,6 +116,11 @@ namespace ThePDFSplitter
             string sanitized = Regex.Replace(filename, @"[^\w\s]", ""); // Remove special characters
             sanitized = sanitized.Replace(" ", "_"); // Replace spaces with underscores
             return sanitized;
+        }
+
+        private void label5_Click(object sender, EventArgs e)
+        {
+
         }
     }
 }
